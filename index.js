@@ -1,4 +1,3 @@
-// Asegura fetch global en Node.js si no existe
 if (typeof fetch === 'undefined') {
   global.fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 }
@@ -6,6 +5,8 @@ const express = require('express');
 const { Sequelize } = require('sequelize');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJSDoc = require('swagger-jsdoc');
+const net = require('net');
+const Redis = require('ioredis');
 const app = express();
 const port = process.env.PORT || 8080;
 
@@ -247,7 +248,6 @@ app.post('/api/test-redis-connection', async (req, res) => {
     return res.status(400).json({ error: 'Faltan datos de conexión' });
   }
 
-  const Redis = require('ioredis');
   const redis = new Redis({
     host,
     port,
@@ -264,6 +264,62 @@ app.post('/api/test-redis-connection', async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error al conectar con Redis', error: error.message });
   }
+});
+
+/**
+ * @openapi
+ * /api/test-tcp-connection:
+ *   post:
+ *     summary: Valida una conexión TCP (tipo ping) a un host y puerto.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - host
+ *               - port
+ *             properties:
+ *               host:
+ *                 type: string
+ *                 example: "8.8.8.8"
+ *               port:
+ *                 type: integer
+ *                 example: 80
+ *               timeout:
+ *                 type: integer
+ *                 example: 3000
+ *     responses:
+ *       200:
+ *         description: Conexión TCP exitosa
+ *       400:
+ *         description: Faltan datos de conexión
+ *       500:
+ *         description: Falló la conexión TCP
+ */
+app.post('/api/test-tcp-connection', async (req, res) => {
+  const { host, port, timeout = 3000 } = req.body;
+
+  if (!host || !port) {
+    return res.status(400).json({ error: 'Faltan datos de conexión' });
+  }
+
+  const socket = new net.Socket();
+
+  const onError = (err) => {
+    socket.destroy();
+    res.status(500).json({ success: false, message: 'Conexión fallida', error: err.message });
+  };
+
+  socket.setTimeout(timeout);
+  socket.once('error', onError);
+  socket.once('timeout', () => onError(new Error('Tiempo de espera agotado')));
+
+  socket.connect(port, host, () => {
+    socket.end();
+    res.json({ success: true, message: 'Conexión TCP exitosa' });
+  });
 });
 
 app.listen(port, () => {
