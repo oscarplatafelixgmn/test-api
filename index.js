@@ -18,7 +18,7 @@ const swaggerDefinition = {
   },
   servers: [
     {
-      url: 'http://localhost:3000',
+      url: `http://localhost:${port}`,
       description: 'Servidor local',
     },
     {
@@ -208,6 +208,61 @@ app.post('/api/test-api-connection', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @openapi
+ * /api/test-redis-connection:
+ *   post:
+ *     summary: Valida conexión a Redis
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - host
+ *               - port
+ *             properties:
+ *               host:
+ *                 type: string
+ *               port:
+ *                 type: integer
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Conexión exitosa a Redis
+ *       400:
+ *         description: Faltan datos de conexión
+ *       500:
+ *         description: Error al conectar con Redis
+ */
+app.post('/api/test-redis-connection', async (req, res) => {
+  const { host, port, password } = req.body;
+
+  if (!host || !port) {
+    return res.status(400).json({ error: 'Faltan datos de conexión' });
+  }
+
+  const Redis = require('ioredis');
+  const redis = new Redis({
+    host,
+    port,
+    password,
+    connectTimeout: 5000,
+    lazyConnect: true,
+  });
+
+  try {
+    await redis.connect();
+    await redis.ping();
+    await redis.quit();
+    res.json({ success: true, message: 'Conexión exitosa a Redis' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error al conectar con Redis', error: error.message });
   }
 });
 
